@@ -129,6 +129,8 @@ typedef struct {
     int selected_timer_index;
     int selected_saved_timer_index;
     int delete_saved_timer_index;
+    int timer_list_selected_index;
+    int timer_list_scroll;
 
     bool epaper_ready;
     uint32_t last_epaper_update_timestamp;
@@ -164,10 +166,20 @@ static void check_expired_timers(MultiTimerApp* app);
 static uint32_t get_remaining_seconds(TimerData* timer);
 static int find_free_timer_slot(MultiTimerApp* app);
 static void multitimer_epaper_update(MultiTimerApp* app, bool force);
+static void multitimer_epaper_show_stopped(MultiTimerApp* app, uint32_t duration_seconds);
 static void multitimer_apply_backlight(MultiTimerApp* app);
 static void submenu_rebuild(MultiTimerApp* app);
 static void format_time(uint32_t seconds, char* buffer, size_t buffer_size);
 static void submenu_callback(void* context, uint32_t index);
+static int count_active_timers(MultiTimerApp* app);
+static int get_active_timer_slot_by_row(MultiTimerApp* app, int row);
+static int get_active_timer_row_for_slot(MultiTimerApp* app, int slot);
+static void deactivate_timer(MultiTimerApp* app, int slot);
+static void navigate_after_timer_removed(MultiTimerApp* app);
+static void timer_list_prepare_selection(MultiTimerApp* app, int prefer_slot);
+static bool multitimer_has_finished_timers(MultiTimerApp* app);
+static int multitimer_count_finished_timers(MultiTimerApp* app);
+static void finished_popup_callback(void* context);
 
 // Timer storage functions
 static void save_timer_data(MultiTimerApp* app) {
@@ -407,6 +419,129 @@ static int find_free_saved_timer_slot(MultiTimerApp* app) {
     return -1;
 }
 
+static int count_active_timers(MultiTimerApp* app) {
+    if(!app) return 0;
+    return (int)app->timer_storage.count;
+}
+
+static int get_active_timer_slot_by_row(MultiTimerApp* app, int row) {
+    if(!app || row < 0) return -1;
+
+    int current_row = 0;
+    for(int i = 0; i < MAX_TIMERS; i++) {
+        if(app->timer_storage.timers[i].active) {
+            if(current_row == row) {
+                return i;
+            }
+            current_row++;
+        }
+    }
+    return -1;
+}
+
+static int get_active_timer_row_for_slot(MultiTimerApp* app, int slot) {
+    if(!app || slot < 0 || slot >= MAX_TIMERS || !app->timer_storage.timers[slot].active) {
+        return -1;
+    }
+
+    int row = 0;
+    for(int i = 0; i < slot; i++) {
+        if(app->timer_storage.timers[i].active) {
+            row++;
+        }
+    }
+    return row;
+}
+
+static void deactivate_timer(MultiTimerApp* app, int slot) {
+    if(!app || slot < 0 || slot >= MAX_TIMERS) return;
+
+    TimerData* timer = &app->timer_storage.timers[slot];
+    if(!timer->active) return;
+
+    multitimer_epaper_show_stopped(app, timer->duration_seconds);
+    timer->active = false;
+    app->timer_storage.count--;
+    if(app->selected_timer_index == slot) {
+        app->selected_timer_index = -1;
+    }
+    if(app->timer_list_selected_index == slot) {
+        app->timer_list_selected_index = -1;
+    }
+    save_timer_data(app);
+    submenu_rebuild(app);
+}
+
+static void navigate_after_timer_removed(MultiTimerApp* app) {
+    if(!app || !app->view_dispatcher) return;
+
+    if(app->timer_storage.count > 0) {
+        timer_list_prepare_selection(app, -1);
+        view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewTimerList);
+    } else {
+        view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewSubmenu);
+    }
+}
+
+static void timer_list_prepare_selection(MultiTimerApp* app, int prefer_slot) {
+    if(!app) return;
+
+    app->timer_list_scroll = 0;
+    app->timer_list_selected_index = -1;
+
+    if(prefer_slot >= 0 && prefer_slot < MAX_TIMERS &&
+       app->timer_storage.timers[prefer_slot].active) {
+        app->timer_list_selected_index = prefer_slot;
+    } else {
+        for(int i = 0; i < MAX_TIMERS; i++) {
+            if(app->timer_storage.timers[i].active) {
+                app->timer_list_selected_index = i;
+                break;
+            }
+        }
+    }
+
+    if(app->timer_list_selected_index >= 0) {
+        int row = get_active_timer_row_for_slot(app, app->timer_list_selected_index);
+        if(row > 3) {
+            app->timer_list_scroll = row - 3;
+        }
+    }
+}
+
+static bool multitimer_has_finished_timers(MultiTimerApp* app) {
+    if(!app) return false;
+
+    for(int i = 0; i < MAX_TIMERS; i++) {
+        TimerData* timer = &app->timer_storage.timers[i];
+        if(timer->active && timer->state == TimerStateFinished) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static int multitimer_count_finished_timers(MultiTimerApp* app) {
+    if(!app) return 0;
+
+    int count = 0;
+    for(int i = 0; i < MAX_TIMERS; i++) {
+        TimerData* timer = &app->timer_storage.timers[i];
+        if(timer->active && timer->state == TimerStateFinished) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static void finished_popup_callback(void* context) {
+    MultiTimerApp* app = context;
+    if(!app || !app->view_dispatcher) return;
+
+    timer_list_prepare_selection(app, -1);
+    view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewTimerList);
+}
+
 static bool start_timer(MultiTimerApp* app, uint32_t duration_seconds, const char* name) {
     int slot = find_free_timer_slot(app);
     if(slot < 0) return false;
@@ -421,6 +556,7 @@ static bool start_timer(MultiTimerApp* app, uint32_t duration_seconds, const cha
     app->timer_storage.count++;
     app->selected_timer_index = slot;
     save_timer_data(app);
+    submenu_rebuild(app);
     multitimer_epaper_update(app, true);
 
     if(app->view_dispatcher) {
@@ -784,8 +920,7 @@ static void timer_running_draw_callback(Canvas* canvas, void* model) {
                     58,
                     AlignCenter,
                     AlignTop,
-                    app->selected_saved_timer_index >= 0 ? "OK:Pause Back:Stop Left:Del" :
-                                                           "OK: Pause  Back: Stop");
+                    "OK:Pause Back:Menu Left:Stop Right:List");
             } else if(timer->state == TimerStatePaused) {
                 canvas_draw_str_aligned(
                     canvas,
@@ -793,14 +928,14 @@ static void timer_running_draw_callback(Canvas* canvas, void* model) {
                     58,
                     AlignCenter,
                     AlignTop,
-                    app->selected_saved_timer_index >= 0 ? "OK:Run Back:Stop Left:Del" :
-                                                           "OK: Resume  Back: Stop");
+                    app->selected_saved_timer_index >= 0 ? "OK:Run Back:Menu Left:Stop Down:Del" :
+                                                           "OK:Run Back:Menu Left:Stop");
             } else if(timer->state == TimerStateFinished) {
                 canvas_set_font(canvas, FontPrimary);
                 canvas_draw_str_aligned(canvas, 64, 20, AlignCenter, AlignTop, "FINISHED!");
                 canvas_set_font(canvas, FontSecondary);
                 canvas_draw_str_aligned(
-                    canvas, 64, 58, AlignCenter, AlignTop, "Press any key to dismiss");
+                    canvas, 64, 58, AlignCenter, AlignTop, "OK: Dismiss");
             }
         }
     }
@@ -815,14 +950,8 @@ static bool timer_running_input_callback(InputEvent* event, void* context) {
             TimerData* timer = &app->timer_storage.timers[app->selected_timer_index];
 
             if(timer->state == TimerStateFinished) {
-                // Timer finished, dismiss it
-                multitimer_epaper_show_stopped(app, timer->duration_seconds);
-                timer->active = false;
-                app->timer_storage.count--;
-                save_timer_data(app);
-                if(app->view_dispatcher) {
-                    view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewTimerList);
-                }
+                deactivate_timer(app, app->selected_timer_index);
+                navigate_after_timer_removed(app);
                 return true;
             }
 
@@ -843,18 +972,26 @@ static bool timer_running_input_callback(InputEvent* event, void* context) {
                 return true;
 
             case InputKeyBack:
-                // Stop timer
-                multitimer_epaper_show_stopped(app, timer->duration_seconds);
-                timer->active = false;
-                app->timer_storage.count--;
-                save_timer_data(app);
+                submenu_rebuild(app);
+                if(app->view_dispatcher) {
+                    view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewSubmenu);
+                }
+                return true;
+
+            case InputKeyLeft:
+                deactivate_timer(app, app->selected_timer_index);
+                navigate_after_timer_removed(app);
+                return true;
+
+            case InputKeyRight:
+                timer_list_prepare_selection(app, app->selected_timer_index);
                 if(app->view_dispatcher) {
                     view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewTimerList);
                 }
                 return true;
 
-            case InputKeyLeft:
-                if(app->selected_saved_timer_index >= 0 &&
+            case InputKeyDown:
+                if(timer->state == TimerStatePaused && app->selected_saved_timer_index >= 0 &&
                    app->selected_saved_timer_index < MAX_TIMERS &&
                    app->timer_storage.saved_timers[app->selected_saved_timer_index].used) {
                     app->delete_saved_timer_index = app->selected_saved_timer_index;
@@ -938,62 +1075,142 @@ static void timer_list_draw_callback(Canvas* canvas, void* model) {
 
     canvas_clear(canvas);
     canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str_aligned(canvas, 64, 5, AlignCenter, AlignTop, "Active Timers");
+
+    int active_count = count_active_timers(app);
+    char title[32];
+    snprintf(title, sizeof(title), "Active Timers (%d)", active_count);
+    canvas_draw_str_aligned(canvas, 64, 5, AlignCenter, AlignTop, title);
 
     canvas_set_font(canvas, FontSecondary);
 
+    if(active_count == 0) {
+        canvas_draw_str_aligned(canvas, 64, 35, AlignCenter, AlignCenter, "No active timers");
+        canvas_draw_str_aligned(canvas, 64, 62, AlignCenter, AlignTop, "Back: Menu");
+        return;
+    }
+
     int y_pos = 20;
-    int active_count = 0;
+    int visible_row = 0;
+    const int max_visible_rows = 4;
 
     for(int i = 0; i < MAX_TIMERS; i++) {
         TimerData* timer = &app->timer_storage.timers[i];
-        if(timer->active) {
-            active_count++;
+        if(!timer->active) continue;
 
-            char display_str[64];
-            char time_str[32];
+        if(visible_row < app->timer_list_scroll) {
+            visible_row++;
+            continue;
+        }
+        if(visible_row - app->timer_list_scroll >= max_visible_rows) {
+            break;
+        }
+
+        char time_str[32];
+        if(timer->state == TimerStateFinished) {
+            snprintf(time_str, sizeof(time_str), "DONE");
+        } else {
             uint32_t remaining = get_remaining_seconds(timer);
             format_time(remaining, time_str, sizeof(time_str));
-
-            const char* state_str = "";
-            if(timer->state == TimerStateRunning) {
-                state_str = ">";
-            } else if(timer->state == TimerStatePaused) {
-                state_str = "||";
-            } else if(timer->state == TimerStateFinished) {
-                state_str = "!";
-            }
-
-            snprintf(display_str, sizeof(display_str), "%s %s", state_str, time_str);
-            canvas_draw_str(canvas, 5, y_pos, display_str);
-            y_pos += 10;
-
-            if(y_pos > 60) break; // Don't overflow screen
         }
+
+        const char* state_str = "";
+        if(timer->state == TimerStateRunning) {
+            state_str = ">";
+        } else if(timer->state == TimerStatePaused) {
+            state_str = "||";
+        } else if(timer->state == TimerStateFinished) {
+            state_str = "!";
+        }
+
+        bool selected = i == app->timer_list_selected_index;
+        if(selected) {
+            canvas_draw_box(canvas, 0, y_pos - 8, 128, 10);
+            canvas_set_color(canvas, ColorWhite);
+        }
+
+        char display_str[64];
+        snprintf(display_str, sizeof(display_str), "%s%-10s %s", state_str, timer->name, time_str);
+        canvas_draw_str(canvas, 5, y_pos, display_str);
+        canvas_set_color(canvas, ColorBlack);
+
+        y_pos += 10;
+        visible_row++;
     }
 
-    if(active_count == 0) {
-        canvas_draw_str_aligned(canvas, 64, 35, AlignCenter, AlignCenter, "No active timers");
-    }
-
-    canvas_draw_str_aligned(canvas, 64, 62, AlignCenter, AlignTop, "Back: Menu");
+    canvas_draw_str_aligned(canvas, 64, 62, AlignCenter, AlignTop, "OK:Open Left:Stop Back:Menu");
 }
 
 static bool timer_list_input_callback(InputEvent* event, void* context) {
     MultiTimerApp* app = context;
     if(!app || !event) return false;
 
-    if(event->type == InputTypePress) {
-        switch(event->key) {
-        case InputKeyBack:
-            if(app->view_dispatcher) {
-                view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewSubmenu);
-            }
-            return true;
+    if(event->type != InputTypePress) return false;
 
-        default:
-            break;
+    int active_count = count_active_timers(app);
+
+    if(active_count == 0) {
+        if(event->key == InputKeyBack && app->view_dispatcher) {
+            view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewSubmenu);
+            return true;
         }
+        return false;
+    }
+
+    if(app->timer_list_selected_index < 0 ||
+       !app->timer_storage.timers[app->timer_list_selected_index].active) {
+        timer_list_prepare_selection(app, -1);
+    }
+
+    int selected_row = get_active_timer_row_for_slot(app, app->timer_list_selected_index);
+
+    switch(event->key) {
+    case InputKeyUp:
+        if(selected_row > 0) {
+            app->timer_list_selected_index =
+                get_active_timer_slot_by_row(app, selected_row - 1);
+            if(selected_row - 1 < app->timer_list_scroll) {
+                app->timer_list_scroll = selected_row - 1;
+            }
+            with_view_model(app->timer_list_view, MultiTimerApp** model, { UNUSED(model); }, true);
+        }
+        return true;
+
+    case InputKeyDown:
+        if(selected_row >= 0 && selected_row < active_count - 1) {
+            app->timer_list_selected_index =
+                get_active_timer_slot_by_row(app, selected_row + 1);
+            if(selected_row + 1 >= app->timer_list_scroll + 4) {
+                app->timer_list_scroll = selected_row + 1 - 3;
+            }
+            with_view_model(app->timer_list_view, MultiTimerApp** model, { UNUSED(model); }, true);
+        }
+        return true;
+
+    case InputKeyOk:
+        if(app->timer_list_selected_index >= 0) {
+            app->selected_timer_index = app->timer_list_selected_index;
+            if(app->view_dispatcher) {
+                view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewTimerRunning);
+            }
+        }
+        return true;
+
+    case InputKeyLeft:
+        if(app->timer_list_selected_index >= 0) {
+            deactivate_timer(app, app->timer_list_selected_index);
+            timer_list_prepare_selection(app, -1);
+            with_view_model(app->timer_list_view, MultiTimerApp** model, { UNUSED(model); }, true);
+        }
+        return true;
+
+    case InputKeyBack:
+        if(app->view_dispatcher) {
+            view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewSubmenu);
+        }
+        return true;
+
+    default:
+        break;
     }
 
     return false;
@@ -1223,8 +1440,16 @@ static void submenu_rebuild(MultiTimerApp* app) {
     }
 
     submenu_add_item(app->submenu, "Add Timer", MultiTimerMenuAddTimer, submenu_callback, app);
+
+    char active_timers_label[32];
+    int active_count = count_active_timers(app);
+    if(active_count > 0) {
+        snprintf(active_timers_label, sizeof(active_timers_label), "Active Timers (%d)", active_count);
+    } else {
+        snprintf(active_timers_label, sizeof(active_timers_label), "Active Timers");
+    }
     submenu_add_item(
-        app->submenu, "View Active Timers", MultiTimerMenuActiveTimers, submenu_callback, app);
+        app->submenu, active_timers_label, MultiTimerMenuActiveTimers, submenu_callback, app);
     submenu_add_item(app->submenu, "Settings", MultiTimerMenuSettings, submenu_callback, app);
 }
 
@@ -1257,6 +1482,7 @@ static void submenu_callback(void* context, uint32_t index) {
             view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewTimerSetup);
         }
     } else if(index == MultiTimerMenuActiveTimers) {
+        timer_list_prepare_selection(app, -1);
         if(app->view_dispatcher) {
             view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewTimerList);
         }
@@ -1460,6 +1686,8 @@ static MultiTimerApp* multitimer_app_alloc() {
     app->selected_timer_index = -1;
     app->selected_saved_timer_index = -1;
     app->delete_saved_timer_index = -1;
+    app->timer_list_selected_index = -1;
+    app->timer_list_scroll = 0;
     app->last_epaper_update_timestamp = 0;
     app->backlight_on = true;
     app->show_on_eink = true;
@@ -1483,6 +1711,7 @@ static MultiTimerApp* multitimer_app_alloc() {
         app->alarm_duration_seconds = DEFAULT_ALARM_DURATION_SECONDS;
     }
     save_timer_data(app);
+    check_expired_timers(app);
     submenu_rebuild(app);
 
     multitimer_apply_backlight(app);
@@ -1604,7 +1833,22 @@ int32_t multitimer_app(void* p) {
         return -1;
     }
 
-    // Start with welcome popup
+    // Start with welcome popup, or finished-timer notice if any expired while away
+    if(multitimer_has_finished_timers(app)) {
+        int finished_count = multitimer_count_finished_timers(app);
+        char finished_text[32];
+        snprintf(
+            finished_text,
+            sizeof(finished_text),
+            "%d timer(s) finished!",
+            finished_count);
+        popup_set_icon(app->welcome_popup, 40, 8, &I_dolphin_welcome_45x45);
+        popup_set_header(app->welcome_popup, "MultiTimer", 64, 10, AlignCenter, AlignTop);
+        popup_set_text(app->welcome_popup, finished_text, 64, 40, AlignCenter, AlignTop);
+        popup_disable_timeout(app->welcome_popup);
+        popup_set_callback(app->welcome_popup, finished_popup_callback);
+    }
+
     view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewWelcomePopup);
 
     // Run the app

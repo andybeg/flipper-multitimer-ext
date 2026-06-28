@@ -49,7 +49,7 @@ because they can hold the serial port.
 - `Clock` - shows current time and date.
 - Saved timers - selecting one starts that countdown.
 - `Add Timer` - creates a new saved timer and starts it.
-- `View Active Timers` - shows currently active timers.
+- `Active Timers` - shows and manages currently running timers (count shown in menu).
 - `Settings` - app and display settings.
 
 ## Add Timer Controls
@@ -62,10 +62,19 @@ because they can hold the serial port.
 ## Running Timer Controls
 
 - `OK` - pause or resume.
-- `Back` - stop the active timer.
-- `Left` - for saved timers, open delete confirmation.
+- `Back` - return to main menu (timer keeps running).
+- `Left` - stop the active timer.
+- `Right` - open Active Timers list.
+- `Down` - while paused on a saved preset, delete that preset.
 
-Delete confirmation:
+## Active Timers Controls
+
+- `Up` / `Down` - select a timer.
+- `OK` - open the selected timer.
+- `Left` - stop or dismiss the selected timer.
+- `Back` - return to main menu.
+
+Delete confirmation (saved presets):
 
 - `OK` - delete the saved timer.
 - `Back` - cancel.
