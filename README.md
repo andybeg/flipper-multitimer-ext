@@ -2,7 +2,7 @@
 
 MultiTimer Ext is a Flipper Zero timer application with saved timer presets,
 a clock screen, optional external WeActStudio e-paper output, and an
-OpenSCAD enclosure model for mounting the display with Flipper Zero.
+OpenSCAD enclosure parts for mounting the display with Flipper Zero.
 
 The Flipper application id is `multitimerext`; the built file is
 `dist/multitimerext.fap`.
@@ -21,7 +21,7 @@ The Flipper application id is `multitimerext`; the built file is
 - Selectable e-paper diagonal in `E-Ink Settings`.
 - Configurable e-paper refresh interval, refresh mode, and color inversion.
 - Optional always-on Flipper backlight while the app is running.
-- Parametric OpenSCAD enclosure for an angled e-paper mount.
+- Parametric OpenSCAD enclosure parts for the e-paper holder and adapter box.
 
 ## Screenshots
 
@@ -166,29 +166,21 @@ E-paper D/C  -> Flipper PC0
 
 ## Enclosure
 
-The enclosure model is in:
+OpenSCAD sources are in `enclosure/`:
 
 ```text
-enclosure/flipper_eink_mount.scad
+enclosure/eink_screen_holder.scad
+enclosure/adapter_pcb_box.scad
 ```
 
-It is an OpenSCAD Customizer-friendly model with editable sections for:
-
-- base box dimensions;
-- e-paper board dimensions;
-- angled screen holder and slide-in grooves;
-- GPIO header position;
-- adapter board opening;
-- optional screen screw holes.
-
-Generated STL:
+Exported holder STL:
 
 ```text
-enclosure/flipper_eink_mount.stl
+enclosure/eink_screen_holder.stl
 ```
 
-Before printing, measure the exact e-paper PCB dimensions and the Flipper GPIO
-height while Flipper lies on its back cover.
+See `enclosure/README.md` for tunable parameters. Before printing, measure the
+exact e-paper PCB dimensions and adapter board size.
 
 ## Data Storage
 
@@ -213,7 +205,7 @@ Useful commands:
 ```bash
 ufbt
 ufbt launch
-openscad -o enclosure/flipper_eink_mount.stl enclosure/flipper_eink_mount.scad
+openscad -o enclosure/eink_screen_holder.stl enclosure/eink_screen_holder.scad
 ```
 
 ## License
