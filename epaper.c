@@ -1,4 +1,5 @@
 #include "epaper.h"
+#include "epaper42_bw.h"
 
 #include <furi.h>
 #include <furi_hal.h>
@@ -143,6 +144,7 @@ static const EpaperPanelProfile epaper_profiles[EpaperModelCount] = {
 };
 
 static EpaperModel epaper_current_model = EPAPER_MODEL_DEFAULT;
+static EpaperModel epaper_initialized_model = EpaperModelCount;
 static uint8_t* epaper_framebuffer = NULL;
 static size_t epaper_buffer_size = 0;
 static bool epaper_initialized = false;
@@ -667,6 +669,9 @@ void epaper_set_model(EpaperModel model) {
     if(model >= EpaperModelCount) {
         model = EPAPER_MODEL_DEFAULT;
     }
+    if(model != epaper_current_model && epaper_initialized) {
+        epaper_deinit();
+    }
     epaper_current_model = model;
 }
 
@@ -690,8 +695,21 @@ bool epaper_model_is_tested(EpaperModel model) {
 }
 
 bool epaper_init(void) {
+    if(epaper_current_model == EpaperModel42) {
+        if(epaper_initialized && epaper_initialized_model == EpaperModel42) {
+            return true;
+        }
+        if(epaper_initialized) {
+            epaper_deinit();
+        }
+        epaper_initialized = epaper42_bw_init();
+        epaper_initialized_model = epaper_initialized ? EpaperModel42 : EpaperModelCount;
+        return epaper_initialized;
+    }
+
     const EpaperPanelProfile* profile = epaper_profile();
-    if(epaper_initialized && epaper_buffer_size == epaper_buffer_size_for(profile)) {
+    if(epaper_initialized && epaper_initialized_model == epaper_current_model &&
+       epaper_buffer_size == epaper_buffer_size_for(profile)) {
         return true;
     }
 
@@ -709,22 +727,26 @@ bool epaper_init(void) {
 
     furi_hal_spi_bus_handle_init(epaper_spi);
     epaper_initialized = true;
+    epaper_initialized_model = epaper_current_model;
     epaper_clear_buffer();
     return true;
 }
 
 void epaper_deinit(void) {
-    if(epaper_initialized) {
+    if(epaper_initialized_model == EpaperModel42) {
+        epaper42_bw_deinit();
+    } else if(epaper_initialized) {
         furi_hal_spi_bus_handle_deinit(epaper_spi);
         furi_hal_gpio_init_simple(epaper_pin_dc, GpioModeAnalog);
         furi_hal_gpio_init_simple(epaper_pin_rst, GpioModeAnalog);
         furi_hal_gpio_init_simple(epaper_pin_busy, GpioModeAnalog);
-        epaper_initialized = false;
     }
 
+    epaper_initialized = false;
     free(epaper_framebuffer);
     epaper_framebuffer = NULL;
     epaper_buffer_size = 0;
+    epaper_initialized_model = EpaperModelCount;
 }
 
 bool epaper_show_timer(
@@ -733,6 +755,16 @@ bool epaper_show_timer(
     EpaperTimerState state,
     EpaperRefreshMode refresh_mode,
     bool invert_colors) {
+    if(epaper_current_model == EpaperModel42) {
+        if(!epaper_initialized && !epaper_init()) return false;
+        return epaper42_bw_show_timer(
+            remaining_seconds,
+            duration_seconds,
+            (Epaper42TimerState)state,
+            (Epaper42RefreshMode)refresh_mode,
+            invert_colors);
+    }
+
     if(!epaper_initialized && !epaper_init()) return false;
 
     epaper_clear_buffer();
