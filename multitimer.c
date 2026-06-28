@@ -624,8 +624,8 @@ static void timer_setup_draw_callback(Canvas* canvas, void* model) {
     canvas_clear(canvas);
     canvas_set_font(canvas, FontPrimary);
 
-    // Draw clock icon next to title
-    canvas_draw_icon(canvas, 45, 3, &I_clock_10x10);
+    // Draw clock icon at the left edge
+    canvas_draw_icon(canvas, 0, 3, &I_clock_10x10);
     canvas_draw_str_aligned(canvas, 64, 5, AlignCenter, AlignTop, "New Timer");
 
     // Draw time inputs
