@@ -23,7 +23,7 @@ corner_r = 3; // [0:0.5:8]
 /* [E-Ink Board] */
 
 // Approximate 4.2" module dimensions. WeAct board may differ; measure yours.
-screen_board_w = 103.0; // [80:0.1:130]
+screen_board_w = 101.0; // [80:0.1:130]
 screen_board_h = 78.5; // [60:0.1:100]
 screen_board_t = 2.0; // [0.8:0.1:4]
 screen_clearance = 0.6; // [0.1:0.1:2]
