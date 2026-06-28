@@ -461,6 +461,9 @@ static void load_timer_data(MultiTimerApp* app) {
         return;
     }
 
+    bool seed_default_saved_timers = false;
+    bool storage_loaded = false;
+
     if(storage_file_open(file, TIMER_DATA_FILE, FSAM_READ, FSOM_OPEN_EXISTING)) {
         uint32_t magic = 0;
         uint32_t version = 0;
@@ -469,13 +472,16 @@ static void load_timer_data(MultiTimerApp* app) {
            storage_file_read(file, &version, sizeof(version)) != sizeof(version) ||
            magic != TIMER_STORAGE_MAGIC) {
             memset(&app->timer_storage, 0, sizeof(TimerStorage));
+            seed_default_saved_timers = true;
         } else if(
             version != TIMER_STORAGE_VERSION && version != TIMER_STORAGE_V7 &&
             version != TIMER_STORAGE_V6 && version != TIMER_STORAGE_V5 &&
             version != TIMER_STORAGE_V4 && version != TIMER_STORAGE_V3 &&
             version != TIMER_STORAGE_V2 && version != TIMER_STORAGE_LEGACY_VERSION) {
             memset(&app->timer_storage, 0, sizeof(TimerStorage));
+            seed_default_saved_timers = true;
         } else {
+            storage_loaded = true;
             app->timer_storage.magic = magic;
             app->timer_storage.version = version;
 
@@ -528,6 +534,8 @@ static void load_timer_data(MultiTimerApp* app) {
                     sizeof(TimerData) * (MAX_TIMERS - TIMER_STORAGE_LEGACY_MAX_TIMERS));
             }
         }
+    } else {
+        seed_default_saved_timers = true;
     }
 
     app->timer_storage.count = 0;
@@ -542,6 +550,9 @@ static void load_timer_data(MultiTimerApp* app) {
 
     if(app->timer_storage.version < TIMER_STORAGE_V6) {
         memset(app->timer_storage.saved_timers, 0, sizeof(app->timer_storage.saved_timers));
+        if(storage_loaded) {
+            seed_default_saved_timers = true;
+        }
     }
     app->timer_storage.saved_count = 0;
     for(int i = 0; i < MAX_TIMERS; i++) {
@@ -552,7 +563,9 @@ static void load_timer_data(MultiTimerApp* app) {
             app->timer_storage.saved_count++;
         }
     }
-    ensure_default_saved_timer(app);
+    if(seed_default_saved_timers) {
+        ensure_default_saved_timer(app);
+    }
 
     storage_file_close(file);
     storage_file_free(file);
@@ -1205,8 +1218,7 @@ static void timer_running_draw_callback(Canvas* canvas, void* model) {
         TimerData* timer = &app->timer_storage.timers[app->selected_timer_index];
 
         if(timer->active) {
-            // Draw hourglass icon next to timer name
-            canvas_draw_icon(canvas, 35, 3, &I_hourglass_10x10);
+            canvas_draw_icon(canvas, 0, 3, &I_hourglass_10x10);
             canvas_draw_str_aligned(canvas, 64, 5, AlignCenter, AlignTop, timer->name);
 
             // Draw remaining time
@@ -1361,7 +1373,6 @@ static bool timer_delete_input_callback(InputEvent* event, void* context) {
                     sizeof(SavedTimerData));
                 app->selected_saved_timer_index = -1;
                 app->delete_saved_timer_index = -1;
-                ensure_default_saved_timer(app);
                 save_timer_data(app);
                 submenu_rebuild(app);
             }
@@ -2030,8 +2041,8 @@ static MultiTimerApp* multitimer_app_alloc() {
     }
     popup_set_context(app->welcome_popup, app);
     popup_set_callback(app->welcome_popup, welcome_popup_callback);
-    popup_set_icon(app->welcome_popup, 40, 8, &I_dolphin_welcome_45x45);
-    popup_set_header(app->welcome_popup, "Welcome!", 64, 60, AlignCenter, AlignTop);
+    popup_set_icon(app->welcome_popup, 40, 3, &I_dolphin_welcome_45x45);
+    popup_set_header(app->welcome_popup, NULL, 0, 0, AlignLeft, AlignTop);
     popup_set_text(
         app->welcome_popup,
         "MultiTimer",
