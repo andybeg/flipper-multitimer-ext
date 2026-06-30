@@ -40,3 +40,4 @@ bool epaper_show_timer(
     EpaperTimerState state,
     EpaperRefreshMode refresh_mode,
     bool invert_colors);
+bool epaper_show_splash(bool invert_colors);
