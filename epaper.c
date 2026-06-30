@@ -1,5 +1,6 @@
 #include "epaper.h"
 #include "epaper42_bw.h"
+#include "dolphin_welcome_epaper.h"
 
 #include <furi.h>
 #include <furi_hal.h>
@@ -50,10 +51,6 @@ typedef struct {
     int32_t colon_w;
     int32_t colon_dot;
     int32_t colon_gap;
-    int32_t status_x;
-    int32_t status_y;
-    int32_t status_w;
-    int32_t status_h;
     int32_t bar_x;
     int32_t bar_y;
     int32_t bar_w;
@@ -296,11 +293,6 @@ static void epaper_compute_layout(const EpaperPanelProfile* profile, EpaperLayou
     layout->colon_gap = profile->height / 8;
     layout->time_x = profile->width / 16;
     layout->time_y = profile->height / 4;
-    layout->status_w = profile->width / 3;
-    layout->status_h = profile->height / 10;
-    if(layout->status_h < 12) layout->status_h = 12;
-    layout->status_x = (profile->width - layout->status_w) / 2;
-    layout->status_y = profile->height / 12;
     layout->bar_w = profile->width * 4 / 5;
     layout->bar_h = profile->height / 12;
     if(layout->bar_h < 8) layout->bar_h = 8;
@@ -353,68 +345,6 @@ static void epaper_draw_time(uint32_t seconds) {
     epaper_draw_digit(x, y, secs / 10, &layout);
     x += layout.digit_step;
     epaper_draw_digit(x, y, secs % 10, &layout);
-}
-
-static void epaper_draw_status(EpaperTimerState state) {
-    const EpaperPanelProfile* profile = epaper_profile();
-    EpaperLayout layout;
-    epaper_compute_layout(profile, &layout);
-
-    switch(state) {
-    case EpaperTimerStateRunning:
-        epaper_draw_rect(
-            layout.status_x, layout.status_y, layout.status_w, layout.status_h, layout.stroke);
-        epaper_fill_rect(
-            layout.status_x + layout.status_w / 5,
-            layout.status_y + layout.status_h / 4,
-            layout.status_w / 2,
-            layout.status_h / 2,
-            true);
-        break;
-    case EpaperTimerStatePaused:
-        epaper_draw_rect(
-            layout.status_x, layout.status_y, layout.status_w, layout.status_h, layout.stroke);
-        epaper_fill_rect(
-            layout.status_x + layout.status_w / 5,
-            layout.status_y + layout.status_h / 5,
-            layout.status_w / 8,
-            layout.status_h * 3 / 5,
-            true);
-        epaper_fill_rect(
-            layout.status_x + layout.status_w * 3 / 5,
-            layout.status_y + layout.status_h / 5,
-            layout.status_w / 8,
-            layout.status_h * 3 / 5,
-            true);
-        break;
-    case EpaperTimerStateFinished:
-        epaper_draw_rect(
-            layout.status_x - layout.status_w / 8,
-            layout.status_y,
-            layout.status_w * 5 / 4,
-            layout.status_h,
-            layout.stroke);
-        epaper_fill_rect(
-            layout.status_x,
-            layout.status_y + layout.status_h / 4,
-            layout.status_w,
-            layout.status_h / 2,
-            true);
-        break;
-    case EpaperTimerStateStopped:
-    default:
-        epaper_draw_rect(
-            layout.status_x, layout.status_y, layout.status_w, layout.status_h, layout.stroke);
-        epaper_fill_rect(
-            layout.status_x + layout.status_w / 4,
-            layout.status_y + layout.status_h / 3,
-            layout.status_w / 2,
-            layout.status_h / 3,
-            true);
-        break;
-    }
-
-    UNUSED(profile);
 }
 
 static void epaper_draw_progress(uint32_t remaining, uint32_t duration) {
@@ -767,8 +697,8 @@ bool epaper_show_timer(
 
     if(!epaper_initialized && !epaper_init()) return false;
 
+    UNUSED(state);
     epaper_clear_buffer();
-    epaper_draw_status(state);
     epaper_draw_time(remaining_seconds);
     epaper_draw_progress(remaining_seconds, duration_seconds);
     if(invert_colors) {
@@ -776,4 +706,24 @@ bool epaper_show_timer(
     }
 
     return epaper_display_buffer(refresh_mode);
+}
+
+bool epaper_show_splash(bool invert_colors) {
+    if(epaper_current_model == EpaperModel42) {
+        if(!epaper_initialized && !epaper_init()) return false;
+        return epaper42_bw_show_splash(invert_colors);
+    }
+
+    if(!epaper_initialized && !epaper_init()) return false;
+
+    if(DOLPHIN_WELCOME_EPAPER_SIZE != epaper_buffer_size) {
+        return false;
+    }
+
+    memcpy(epaper_framebuffer, dolphin_welcome_epaper_bitmap, epaper_buffer_size);
+    if(invert_colors) {
+        epaper_invert_buffer();
+    }
+
+    return epaper_display_buffer(EpaperRefreshModeFull);
 }
