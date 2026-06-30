@@ -1,4 +1,5 @@
 #include "epaper42_bw.h"
+#include "dolphin_welcome_epaper.h"
 
 #include <furi.h>
 #include <furi_hal.h>
@@ -234,29 +235,6 @@ static void epaper42_draw_time(uint32_t seconds) {
     epaper42_draw_digit(x + 298, y, secs % 10);
 }
 
-static void epaper42_draw_status(Epaper42TimerState state) {
-    switch(state) {
-    case Epaper42TimerStateRunning:
-        epaper42_draw_rect(134, 22, 132, 28);
-        epaper42_fill_rect(158, 30, 72, 12, true);
-        break;
-    case Epaper42TimerStatePaused:
-        epaper42_draw_rect(134, 22, 132, 28);
-        epaper42_fill_rect(165, 29, 18, 14, true);
-        epaper42_fill_rect(216, 29, 18, 14, true);
-        break;
-    case Epaper42TimerStateFinished:
-        epaper42_draw_rect(104, 22, 192, 28);
-        epaper42_fill_rect(124, 30, 152, 12, true);
-        break;
-    case Epaper42TimerStateStopped:
-    default:
-        epaper42_draw_rect(134, 22, 132, 28);
-        epaper42_fill_rect(164, 30, 72, 12, true);
-        break;
-    }
-}
-
 static void epaper42_draw_progress(uint32_t remaining, uint32_t duration) {
     int32_t x = 40;
     int32_t y = 220;
@@ -340,13 +318,13 @@ bool epaper42_bw_show_timer(
     Epaper42TimerState state,
     Epaper42RefreshMode refresh_mode,
     bool invert_colors) {
+    UNUSED(state);
     if(!epaper42_initialized && !epaper42_bw_init()) {
         FURI_LOG_E("EPaper42", "init failed in show_timer");
         return false;
     }
 
     epaper42_clear_buffer();
-    epaper42_draw_status(state);
     epaper42_draw_time(remaining_seconds);
     epaper42_draw_progress(remaining_seconds, duration_seconds);
     if(invert_colors) {
@@ -355,6 +333,27 @@ bool epaper42_bw_show_timer(
 
     bool ok = epaper42_display_buffer(refresh_mode);
     FURI_LOG_I("EPaper42", "show_timer ok=%d rem=%lu", ok, (unsigned long)remaining_seconds);
+    return ok;
+}
+
+bool epaper42_bw_show_splash(bool invert_colors) {
+    if(!epaper42_initialized && !epaper42_bw_init()) {
+        FURI_LOG_E("EPaper42", "init failed in show_splash");
+        return false;
+    }
+
+    if(DOLPHIN_WELCOME_EPAPER_SIZE != EPAPER42_BUFFER_SIZE) {
+        FURI_LOG_E("EPaper42", "splash bitmap size mismatch");
+        return false;
+    }
+
+    memcpy(epaper42_framebuffer, dolphin_welcome_epaper_bitmap, EPAPER42_BUFFER_SIZE);
+    if(invert_colors) {
+        epaper42_invert_buffer();
+    }
+
+    bool ok = epaper42_display_buffer(Epaper42RefreshModeFull);
+    FURI_LOG_I("EPaper42", "show_splash ok=%d", ok);
     return ok;
 }
 
