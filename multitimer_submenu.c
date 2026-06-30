@@ -1,7 +1,11 @@
 #include "multitimer.h"
 #include <multitimerext_icons.h>
 
-void multitimer_show_splash_popup(MultiTimerApp* app, PopupCallback callback, uint32_t timeout_ms) {
+void multitimer_show_splash_popup(
+    MultiTimerApp* app,
+    PopupCallback callback,
+    uint32_t timeout_ms,
+    bool show_epaper_splash) {
     if(!app || !app->welcome_popup) return;
 
     popup_set_icon(app->welcome_popup, 36, 0, &I_dolphin_welcome_56x56);
@@ -15,7 +19,9 @@ void multitimer_show_splash_popup(MultiTimerApp* app, PopupCallback callback, ui
         view_dispatcher_switch_to_view(app->view_dispatcher, MultiTimerViewWelcomePopup);
     }
 
-    multitimer_request_epaper_splash(app);
+    if(show_epaper_splash) {
+        multitimer_request_epaper_splash(app);
+    }
 }
 
 void submenu_rebuild(MultiTimerApp* app) {

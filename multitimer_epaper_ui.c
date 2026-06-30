@@ -72,6 +72,44 @@ void multitimer_request_epaper_splash(MultiTimerApp* app) {
         app->view_dispatcher, MultiTimerCustomEventEpaperSplash);
 }
 
+void multitimer_epaper_show_clear(MultiTimerApp* app) {
+    if(!app || !app->show_on_eink) return;
+
+    multitimer_epaper_reinit(app);
+    if(!app->epaper_ready) {
+        app->epaper_ready = epaper42_bw_init();
+        if(!app->epaper_ready) {
+            FURI_LOG_E(TAG, "e-paper init failed");
+            return;
+        }
+    }
+
+    epaper42_bw_clear_screen(app->epaper_invert_colors);
+    app->last_epaper_update_timestamp = furi_hal_rtc_get_timestamp();
+}
+
+void multitimer_request_epaper_clear(MultiTimerApp* app) {
+    if(!app || !app->view_dispatcher || !app->show_on_eink) return;
+    view_dispatcher_send_custom_event(
+        app->view_dispatcher, MultiTimerCustomEventEpaperClear);
+}
+
+void multitimer_epaper_apply_exit_action(MultiTimerApp* app) {
+    if(!app || !app->show_on_eink) return;
+
+    switch(app->epaper_on_exit) {
+    case EinkExitClean:
+        multitimer_request_epaper_clear(app);
+        break;
+    case EinkExitLogo:
+        multitimer_request_epaper_splash(app);
+        break;
+    case EinkExitNothing:
+    default:
+        break;
+    }
+}
+
 TimerData* multitimer_get_epaper_timer(MultiTimerApp* app) {
     if(!app) return NULL;
 

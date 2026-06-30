@@ -121,6 +121,31 @@ void settings_epaper_refresh_changed(VariableItem* item) {
     multitimer_save_settings(app);
 }
 
+static const char* eink_exit_action_label(EinkExitAction action) {
+    switch(action) {
+    case EinkExitClean:
+        return "Clean";
+    case EinkExitLogo:
+        return "Logo";
+    case EinkExitNothing:
+    default:
+        return "Nothing";
+    }
+}
+
+void settings_epaper_on_exit_changed(VariableItem* item) {
+    MultiTimerApp* app = variable_item_get_context(item);
+    if(!app || eink_settings_rebuilding) return;
+
+    uint8_t index = variable_item_get_current_value_index(item);
+    if(index >= EinkExitCount) index = EinkExitLogo;
+
+    app->epaper_on_exit = index;
+    variable_item_set_current_value_text(
+        item, eink_exit_action_label((EinkExitAction)app->epaper_on_exit));
+    multitimer_save_settings(app);
+}
+
 void settings_alarm_duration_changed(VariableItem* item) {
     MultiTimerApp* app = variable_item_get_context(item);
     if(!app) return;
@@ -274,5 +299,15 @@ void eink_settings_refresh(MultiTimerApp* app) {
         app->epaper_refresh_text,
         sizeof(app->epaper_refresh_text));
     variable_item_set_current_value_text(epaper_item, app->epaper_refresh_text);
+
+    VariableItem* on_exit_item = variable_item_list_add(
+        app->eink_settings_list, "On Exit", EinkExitCount, settings_epaper_on_exit_changed, app);
+    if(app->epaper_on_exit >= EinkExitCount) {
+        app->epaper_on_exit = EinkExitLogo;
+    }
+    variable_item_set_current_value_index(on_exit_item, app->epaper_on_exit);
+    variable_item_set_current_value_text(
+        on_exit_item, eink_exit_action_label((EinkExitAction)app->epaper_on_exit));
+
     eink_settings_rebuilding = false;
 }

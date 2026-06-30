@@ -44,7 +44,8 @@ bool multitimer_navigation_event_callback(void* context) {
         multitimer_clear_active_timers(app);
     }
     save_timer_data(app);
-    multitimer_show_splash_popup(app, goodbye_popup_callback, 3000);
+    multitimer_epaper_apply_exit_action(app);
+    multitimer_show_splash_popup(app, goodbye_popup_callback, 3000, false);
     return true;
 }
 
@@ -59,6 +60,11 @@ bool multitimer_custom_event_callback(void* context, uint32_t event) {
 
     if(event == MultiTimerCustomEventEpaperSplash) {
         multitimer_epaper_show_splash(app);
+        return true;
+    }
+
+    if(event == MultiTimerCustomEventEpaperClear) {
+        multitimer_epaper_show_clear(app);
         return true;
     }
 
@@ -241,6 +247,7 @@ MultiTimerApp* multitimer_app_alloc() {
     app->epaper_invert_colors = false;
     app->rotate_screen = false;
     app->clear_timers_on_exit = false;
+    app->epaper_on_exit = EinkExitLogo;
     app->epaper_model = EPAPER_MODEL_DEFAULT;
     app->epaper_refresh_seconds = DEFAULT_EPAPER_REFRESH_SECONDS;
     app->alarm_duration_seconds = DEFAULT_ALARM_DURATION_SECONDS;
@@ -412,7 +419,7 @@ int32_t multitimer_app(void* p) {
             multitimer_request_epaper_splash(app);
         }
     } else {
-        multitimer_show_splash_popup(app, welcome_popup_callback, 3000);
+        multitimer_show_splash_popup(app, welcome_popup_callback, 3000, true);
     }
 
     if(multitimer_has_finished_timers(app)) {

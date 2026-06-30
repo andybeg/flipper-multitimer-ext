@@ -6,9 +6,12 @@
 
 $fn = 48;
 
+/* [Mount Span] */
+
+mount_span_w = 96.0; // [80:0.1:130]
+
 /* [E-Ink Board] */
 
-screen_board_w = 101.0; // [80:0.1:130]
 screen_board_h = 78.5; // [60:0.1:100]
 screen_board_t = 2.0; // [0.8:0.1:4]
 screen_clearance = 0.6; // [0.1:0.1:2]
@@ -51,7 +54,8 @@ side_pin_len = 3.0; // [1:0.5:10]
 
 part_z_h = back_plate_t + slot_gap + slot_lip_t;
 side_pin_d = part_z_h;
-holder_w = screen_board_w + 2 * (slot_wall + screen_clearance);
+holder_w = mount_span_w;
+screen_board_w = mount_span_w - 2 * (slot_wall + screen_clearance);
 holder_h = screen_board_h * holder_ratio + bottom_stop_h + screen_clearance;
 
 module rounded_plate(w, h, t, r) {

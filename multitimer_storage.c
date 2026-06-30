@@ -33,6 +33,7 @@ void multitimer_settings_from_app(MultiTimerApp* app, AppSettingsFile* settings)
     settings->epaper_model = app->epaper_model;
     settings->rotate_screen = app->rotate_screen ? 1 : 0;
     settings->clear_timers_on_exit = app->clear_timers_on_exit ? 1 : 0;
+    settings->epaper_on_exit = app->epaper_on_exit;
     settings->epaper_refresh_seconds = app->epaper_refresh_seconds;
     settings->alarm_duration_seconds = app->alarm_duration_seconds;
 }
@@ -51,6 +52,10 @@ void multitimer_apply_settings_file(MultiTimerApp* app, const AppSettingsFile* s
     }
     app->rotate_screen = settings->rotate_screen != 0;
     app->clear_timers_on_exit = settings->clear_timers_on_exit != 0;
+    app->epaper_on_exit = EinkExitLogo;
+    if(settings->epaper_on_exit < EinkExitCount) {
+        app->epaper_on_exit = settings->epaper_on_exit;
+    }
     if(settings->epaper_refresh_seconds > 0) {
         app->epaper_refresh_seconds = settings->epaper_refresh_seconds;
     }

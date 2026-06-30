@@ -727,3 +727,19 @@ bool epaper_show_splash(bool invert_colors) {
 
     return epaper_display_buffer(EpaperRefreshModeFull);
 }
+
+bool epaper_clear_screen(bool invert_colors) {
+    if(epaper_current_model == EpaperModel42) {
+        if(!epaper_initialized && !epaper_init()) return false;
+        return epaper42_bw_clear_screen(invert_colors);
+    }
+
+    if(!epaper_initialized && !epaper_init()) return false;
+
+    epaper_clear_buffer();
+    if(invert_colors) {
+        epaper_invert_buffer();
+    }
+
+    return epaper_display_buffer(EpaperRefreshModeFull);
+}

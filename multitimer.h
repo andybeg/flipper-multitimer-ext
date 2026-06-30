@@ -45,7 +45,15 @@
 typedef enum {
     MultiTimerCustomEventEpaperRefresh = 100,
     MultiTimerCustomEventEpaperSplash,
+    MultiTimerCustomEventEpaperClear,
 } MultiTimerCustomEvent;
+
+typedef enum {
+    EinkExitClean = 0,
+    EinkExitLogo,
+    EinkExitNothing,
+    EinkExitCount,
+} EinkExitAction;
 
 typedef enum {
     MultiTimerViewSubmenu,
@@ -139,7 +147,7 @@ typedef struct {
     uint8_t epaper_model;
     uint8_t rotate_screen;
     uint8_t clear_timers_on_exit;
-    uint8_t padding;
+    uint8_t epaper_on_exit;
     uint32_t epaper_refresh_seconds;
     uint32_t alarm_duration_seconds;
 } AppSettingsFile;
@@ -186,6 +194,8 @@ struct MultiTimerApp {
     bool epaper_invert_colors;
     bool rotate_screen;
     bool clear_timers_on_exit;
+    uint8_t epaper_on_exit;
+    char epaper_on_exit_text[16];
     char epaper_refresh_text[16];
     uint8_t epaper_model;
 
@@ -230,7 +240,10 @@ void multitimer_epaper_show_stopped(MultiTimerApp* app, uint32_t duration_second
 void multitimer_epaper_show_setup(MultiTimerApp* app);
 void multitimer_epaper_show_setup_throttled(MultiTimerApp* app);
 void multitimer_epaper_show_splash(MultiTimerApp* app);
+void multitimer_epaper_show_clear(MultiTimerApp* app);
+void multitimer_epaper_apply_exit_action(MultiTimerApp* app);
 void multitimer_request_epaper_splash(MultiTimerApp* app);
+void multitimer_request_epaper_clear(MultiTimerApp* app);
 void multitimer_epaper_show_clock(MultiTimerApp* app);
 void multitimer_epaper_update(MultiTimerApp* app, bool force);
 
@@ -250,7 +263,11 @@ void submenu_rebuild(MultiTimerApp* app);
 void submenu_callback(void* context, uint32_t index);
 void welcome_popup_callback(void* context);
 void goodbye_popup_callback(void* context);
-void multitimer_show_splash_popup(MultiTimerApp* app, PopupCallback callback, uint32_t timeout_ms);
+void multitimer_show_splash_popup(
+    MultiTimerApp* app,
+    PopupCallback callback,
+    uint32_t timeout_ms,
+    bool show_epaper_splash);
 
 void clock_draw_callback(Canvas* canvas, void* model);
 bool clock_input_callback(InputEvent* event, void* context);

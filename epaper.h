@@ -41,3 +41,4 @@ bool epaper_show_timer(
     EpaperRefreshMode refresh_mode,
     bool invert_colors);
 bool epaper_show_splash(bool invert_colors);
+bool epaper_clear_screen(bool invert_colors);

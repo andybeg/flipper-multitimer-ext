@@ -24,4 +24,5 @@ bool epaper42_bw_show_timer(
     Epaper42RefreshMode refresh_mode,
     bool invert_colors);
 bool epaper42_bw_show_splash(bool invert_colors);
+bool epaper42_bw_clear_screen(bool invert_colors);
 bool epaper42_bw_test_refresh(void);
